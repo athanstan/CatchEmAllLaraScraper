@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
 use Spatie\Crawler\CrawlObservers\CrawlObserver;
+use Symfony\Component\DomCrawler\Crawler;
 
 class PokemonGenerationScraperObserver extends CrawlObserver
 {
@@ -36,9 +37,24 @@ class PokemonGenerationScraperObserver extends CrawlObserver
         ?string $linkText = null,
     ): void {
         Log::info("Crawled: {$url}");
-        Log::info('Response', ['response' => $response->getBody()]);
-        // Get the response body
-        $content = (string) $response->getBody();
+
+        $crawler = new Crawler((string) $response->getBody());
+
+        $genTableCrawler = $crawler->filter('h3')->reduce(function (Crawler $node) {
+            return str_contains($node->text(), 'Generation I');
+        })->nextAll()->filter('table')->first();
+
+        $pokemonData = collect($genTableCrawler->filter('tr')->each(function (Crawler $tr, $i) {
+            if (!$tr->filter('th')->count()) {
+                return (object) [
+                    'name' => $tr->filter('td')->eq(2)->text(),
+                    'image' => $tr->filter('td img')->attr('src')
+                ];
+            }
+            return null;
+        }))->filter()->values();
+
+        dd($pokemonData);
     }
 
     /*
